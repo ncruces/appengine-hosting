@@ -97,6 +97,7 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 		sendRange(w, r, etag, lastModified)
 		sendBlob(w, string(key))
+		sendHeaders(w)
 		return HttpResult{}
 	}
 }
@@ -212,6 +213,15 @@ func sendRange(w http.ResponseWriter, r *http.Request, etag string, modified str
 		}
 	}
 	w.Header().Set("Accept-Ranges", "bytes")
+}
+
+func sendHeaders(w http.ResponseWriter) {
+	h := w.Header()
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Download-Options", "noopen")
+	h.Set("X-Frame-Options", "SAMEORIGIN")
+	h.Set("X-XSS-Protection", "1; mode=block")
 }
 
 func sendNotFound(w http.ResponseWriter, bucket string, fetch *http.Client) HttpResult {
