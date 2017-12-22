@@ -26,30 +26,28 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 	bucket := r.URL.Hostname()
 	object := r.URL.EscapedPath()
 
-	fetch := &http.Client{
+	gcsClient := &http.Client{
 		Transport: &oauth2.Transport{
 			Base:   &urlfetch.Transport{Context: r.Context()},
 			Source: google.AppEngineTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only"),
 		},
 	}
 
-	if !initWebsite(bucket, fetch) {
-		if !strings.HasPrefix(bucket, "www.") &&
-			initWebsite("www."+bucket, fetch) {
-
+	if !initWebsite(gcsClient, bucket) {
+		if !strings.HasPrefix(bucket, "www.") && initWebsite(gcsClient, "www."+bucket) {
 			r.URL.Host = "www." + r.URL.Host
 			return HttpResult{Status: http.StatusMovedPermanently, Location: r.URL.String()}
 		}
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	res, object := getMetadata(bucket, object, fetch)
+	res, object := getMetadata(gcsClient, bucket, object)
 
 	if res == nil {
 		return HttpResult{Status: http.StatusInternalServerError}
 	}
 	if res.StatusCode == http.StatusNotFound {
-		return sendNotFound(w, bucket, fetch)
+		return sendNotFound(w, gcsClient, bucket)
 	}
 	if res.StatusCode != http.StatusOK {
 		return HttpResult{Status: res.StatusCode, Message: res.Status}
@@ -95,21 +93,21 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 			}
 		}
 
-		sendRange(w, r, etag, lastModified)
-		sendBlob(w, string(key))
 		sendHeaders(w)
+		sendBlob(w, string(key))
+		sendRange(w, r, etag, lastModified)
 		return HttpResult{}
 	}
 }
 
-func initWebsite(bucket string, fetch *http.Client) bool {
+func initWebsite(gcsClient *http.Client, bucket string) bool {
 	var config WebsiteConfiguration
 
 	if _, ok := websites[bucket]; ok {
 		return true
 	}
 
-	res, _ := fetch.Get("https://storage.googleapis.com/" + bucket + "?websiteConfig")
+	res, _ := gcsClient.Get("https://storage.googleapis.com/" + bucket + "?websiteConfig")
 
 	if res != nil {
 		defer res.Body.Close()
@@ -122,7 +120,7 @@ func initWebsite(bucket string, fetch *http.Client) bool {
 	return true
 }
 
-func getMetadata(bucket string, object string, fetch *http.Client) (*http.Response, string) {
+func getMetadata(gcsClient *http.Client, bucket string, object string) (*http.Response, string) {
 	website := websites[bucket]
 	notFoundPage := "/" + website.NotFoundPage
 	mainPageSuffix := "/" + website.MainPageSuffix
@@ -134,11 +132,11 @@ func getMetadata(bucket string, object string, fetch *http.Client) (*http.Respon
 		return &http.Response{StatusCode: http.StatusNotFound}, object
 	}
 
-	res, _ := fetch.Head("https://storage.googleapis.com/" + bucket + object)
+	res, _ := gcsClient.Head("https://storage.googleapis.com/" + bucket + object)
 
 	if res != nil && (res.StatusCode == http.StatusNotFound || strings.HasSuffix(object, "/") && res.Header.Get("x-goog-stored-content-length") == "0") {
 		object = strings.TrimRight(object, "/") + mainPageSuffix
-		res, _ = fetch.Head("https://storage.googleapis.com/" + bucket + object)
+		res, _ = gcsClient.Head("https://storage.googleapis.com/" + bucket + object)
 	}
 
 	return res, object
@@ -212,7 +210,6 @@ func sendRange(w http.ResponseWriter, r *http.Request, etag string, modified str
 			w.Header().Set("X-AppEngine-BlobRange", "")
 		}
 	}
-	w.Header().Set("Accept-Ranges", "bytes")
 }
 
 func sendHeaders(w http.ResponseWriter) {
@@ -224,7 +221,7 @@ func sendHeaders(w http.ResponseWriter) {
 	h.Set("X-XSS-Protection", "1; mode=block")
 }
 
-func sendNotFound(w http.ResponseWriter, bucket string, fetch *http.Client) HttpResult {
+func sendNotFound(w http.ResponseWriter, gcsClient *http.Client, bucket string) HttpResult {
 	website := websites[bucket]
 	notFoundPage := "/" + website.NotFoundPage
 
@@ -232,7 +229,7 @@ func sendNotFound(w http.ResponseWriter, bucket string, fetch *http.Client) Http
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	res, _ := fetch.Get("https://storage.googleapis.com/" + bucket + notFoundPage)
+	res, _ := gcsClient.Get("https://storage.googleapis.com/" + bucket + notFoundPage)
 
 	if res != nil {
 		defer res.Body.Close()
