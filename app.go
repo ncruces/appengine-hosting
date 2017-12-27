@@ -19,41 +19,41 @@ type WebsiteConfiguration struct {
 }
 
 func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
-	if result := checkMethod(w, r); result != 0 {
+	if result := checkMethod(w, r); result >= 400 {
 		return HttpResult{Status: result}
 	}
 
 	bucket := r.URL.Hostname()
 	object := r.URL.EscapedPath()
 
-	gcsClient := &http.Client{
+	gcs := &http.Client{
 		Transport: &oauth2.Transport{
 			Base:   &urlfetch.Transport{Context: r.Context()},
 			Source: google.AppEngineTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only"),
 		},
 	}
 
-	if !initWebsite(gcsClient, bucket) {
-		if !strings.HasPrefix(bucket, "www.") && initWebsite(gcsClient, "www."+bucket) {
+	if !initWebsite(gcs, bucket) {
+		if !strings.HasPrefix(bucket, "www.") && initWebsite(gcs, "www."+bucket) {
 			r.URL.Host = "www." + r.URL.Host
 			return HttpResult{Status: http.StatusMovedPermanently, Location: r.URL.String()}
 		}
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	res, object := getMetadata(gcsClient, bucket, object)
+	res, object := getMetadata(gcs, bucket, object)
 
 	if res == nil {
 		return HttpResult{Status: http.StatusInternalServerError}
 	}
 	if res.StatusCode == http.StatusNotFound {
-		return sendNotFound(w, gcsClient, bucket)
+		return sendNotFound(w, gcs, bucket)
 	}
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode >= 400 {
 		return HttpResult{Status: res.StatusCode, Message: res.Status}
 	}
-	if res.Header.Get("x-goog-stored-content-encoding") != "identity" {
-		return HttpResult{Status: http.StatusNotImplemented}
+	if res.StatusCode != http.StatusOK {
+		return HttpResult{Status: http.StatusInternalServerError}
 	}
 
 	etag := res.Header.Get("Etag")
@@ -73,12 +73,10 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 				w.Header()[name] = values
 			}
 		}
-		return HttpResult{Status: http.StatusNotModified}
+		w.WriteHeader(http.StatusNotModified)
+		return HttpResult{}
 	} else {
-		key, err := blobstore.BlobKeyForFile(r.Context(), "/gs/"+bucket+object)
-		if err != nil {
-			return HttpResult{Status: http.StatusInternalServerError}
-		}
+		sendHeaders(w)
 
 		for name, values := range res.Header {
 			switch name {
@@ -93,21 +91,22 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 			}
 		}
 
-		sendHeaders(w)
-		sendBlob(w, string(key))
-		sendRange(w, r, etag, lastModified)
-		return HttpResult{}
+		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
+			return sendBlob(w, r, bucket, object, etag, lastModified)
+		} else {
+			return sendEncodedBlob(w, gcs, bucket, object)
+		}
 	}
 }
 
-func initWebsite(gcsClient *http.Client, bucket string) bool {
+func initWebsite(gcs *http.Client, bucket string) bool {
 	var config WebsiteConfiguration
 
 	if _, ok := websites[bucket]; ok {
 		return true
 	}
 
-	res, _ := gcsClient.Get("https://storage.googleapis.com/" + bucket + "?websiteConfig")
+	res, _ := gcs.Get("https://storage.googleapis.com/" + bucket + "?websiteConfig")
 
 	if res != nil {
 		defer res.Body.Close()
@@ -120,7 +119,7 @@ func initWebsite(gcsClient *http.Client, bucket string) bool {
 	return true
 }
 
-func getMetadata(gcsClient *http.Client, bucket string, object string) (*http.Response, string) {
+func getMetadata(gcs *http.Client, bucket string, object string) (*http.Response, string) {
 	website := websites[bucket]
 	notFoundPage := "/" + website.NotFoundPage
 	mainPageSuffix := "/" + website.MainPageSuffix
@@ -132,11 +131,11 @@ func getMetadata(gcsClient *http.Client, bucket string, object string) (*http.Re
 		return &http.Response{StatusCode: http.StatusNotFound}, object
 	}
 
-	res, _ := gcsClient.Head("https://storage.googleapis.com/" + bucket + object)
+	res, _ := gcs.Head("https://storage.googleapis.com/" + bucket + object)
 
 	if res != nil && (res.StatusCode == http.StatusNotFound || strings.HasSuffix(object, "/") && res.Header.Get("x-goog-stored-content-length") == "0") {
 		object = strings.TrimRight(object, "/") + mainPageSuffix
-		res, _ = gcsClient.Head("https://storage.googleapis.com/" + bucket + object)
+		res, _ = gcs.Head("https://storage.googleapis.com/" + bucket + object)
 	}
 
 	return res, object
@@ -196,22 +195,6 @@ func checkConditions(r *http.Request, etag string, lastModified string) int {
 	return 0
 }
 
-func sendBlob(w http.ResponseWriter, key string) {
-	w.Header().Set("X-AppEngine-BlobKey", key)
-}
-
-func sendRange(w http.ResponseWriter, r *http.Request, etag string, modified string) {
-	header := r.Header.Get("Range")
-	if len(header) > 0 {
-		condition := r.Header.Get("If-Range")
-		if len(condition) == 0 || condition == etag || condition == modified {
-			w.Header().Set("X-AppEngine-BlobRange", header)
-		} else {
-			w.Header().Set("X-AppEngine-BlobRange", "")
-		}
-	}
-}
-
 func sendHeaders(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -221,7 +204,40 @@ func sendHeaders(w http.ResponseWriter) {
 	h.Set("X-XSS-Protection", "1; mode=block")
 }
 
-func sendNotFound(w http.ResponseWriter, gcsClient *http.Client, bucket string) HttpResult {
+func sendBlob(w http.ResponseWriter, r *http.Request, bucket string, object string, etag string, modified string) HttpResult {
+	key, err := blobstore.BlobKeyForFile(r.Context(), "/gs/"+bucket+object)
+	if err != nil {
+		return HttpResult{Status: http.StatusInternalServerError}
+	}
+
+	header := r.Header.Get("Range")
+	if len(header) > 0 {
+		condition := r.Header.Get("If-Range")
+		if len(condition) != 0 && condition != etag && condition != modified {
+			header = ""
+		}
+		w.Header().Set("X-AppEngine-BlobRange", header)
+	}
+
+	w.Header().Set("X-AppEngine-BlobKey", string(key))
+	return HttpResult{}
+}
+
+func sendEncodedBlob(w http.ResponseWriter, gcs *http.Client, bucket string, object string) HttpResult {
+	res, _ := gcs.Get("https://storage.googleapis.com/" + bucket + object)
+
+	if res != nil {
+		defer res.Body.Close()
+	}
+	if res == nil || res.StatusCode != http.StatusOK {
+		return HttpResult{Status: http.StatusInternalServerError}
+	}
+
+	io.Copy(w, res.Body)
+	return HttpResult{}
+}
+
+func sendNotFound(w http.ResponseWriter, gcs *http.Client, bucket string) HttpResult {
 	website := websites[bucket]
 	notFoundPage := "/" + website.NotFoundPage
 
@@ -229,7 +245,7 @@ func sendNotFound(w http.ResponseWriter, gcsClient *http.Client, bucket string) 
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	res, _ := gcsClient.Get("https://storage.googleapis.com/" + bucket + notFoundPage)
+	res, _ := gcs.Get("https://storage.googleapis.com/" + bucket + notFoundPage)
 
 	if res != nil {
 		defer res.Body.Close()
