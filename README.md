@@ -4,7 +4,7 @@
 
 [Proposed solutions](https://cloud.google.com/storage/docs/static-website#https) are: [a load balancer](https://cloud.google.com/compute/docs/load-balancing/http/adding-a-backend-bucket-to-content-based-load-balancing), a [third-party CDN](https://cloud.google.com/interconnect/docs/how-to/cdn-interconnect), and [Firebase Hosting](https://firebase.google.com/docs/hosting/).
 
-This offers another, cost effective, customizable, alternative: a single App Engine app that can host as many static websites as needed.
+This offers an additional, cost effective, customizable, alternative: a single App Engine app that can host as many static websites as needed.
 
 ### How and why?
 
@@ -22,10 +22,10 @@ You should now be able to use HTTPS to access the website.
 
 * Website configuration for the bucket (Main page, and 404 page) is respected by default.
 * Multiple domains can be mapped to the app, content will be served from the corresponding buckets.
-* If you map `example.com` to the app and no `example.com` bucket exists, a redirect to `www.example.com` is issued (if it exists).
-* All HTTP traffic is redirected to HTTPS.
-* This [issue](https://issuetracker.google.com/issues/70223986) means compressed objects in Cloud Storage are not supported (don't use `gsutil -z` or `-Z` to upload).
+* If you map `example.com` to the app and no `example.com` bucket exists, a redirect to `www.example.com` is issued (if that bucket exists).
+* All HTTP traffic is 301 redirected to HTTPS (see [app.yaml](app.yaml))
 * This [issue](https://cloud.google.com/storage/docs/static-website#empty-obj) is fixed.
+* This [issue](https://issuetracker.google.com/issues/70223986) means compressed objects in Cloud Storage larger than 32Mb are not supported (don't use `gsutil -z` or `-Z` to upload them).
 * Some [security headers](https://securityheaders.io/) are added, many [Cloud Storage headers](https://cloud.google.com/storage/docs/xml-api/reference-headers) are hidden.
 
 ### Future work
