@@ -197,7 +197,9 @@ func checkConditions(r *http.Request, etag string, lastModified string) int {
 
 func sendHeaders(w http.ResponseWriter) {
 	h := w.Header()
+	h.Set("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval'")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("Strict-Transport-Security", "max-age=86400")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-Download-Options", "noopen")
 	h.Set("X-Frame-Options", "SAMEORIGIN")
