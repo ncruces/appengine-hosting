@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 var websites = map[string]WebsiteConfiguration{}
@@ -58,41 +59,24 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 	etag := res.Header.Get("Etag")
 	lastModified := res.Header.Get("Last-Modified")
-	check := checkConditions(r, etag, lastModified)
+	check := checkConditions(r, etag, lastModified, true)
 
 	if check >= 400 {
 		return HttpResult{Status: check}
 	}
 	if check == http.StatusNotModified {
-		for name, values := range res.Header {
-			switch name {
-			case
-				"Etag",
-				"Last-Modified",
-				"Cache-Control":
-				w.Header()[name] = values
-			}
-		}
-		w.WriteHeader(http.StatusNotModified)
-		return HttpResult{}
+		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
+		return HttpResult{Status: check}
 	} else {
-		sendHeaders(w)
-
-		for name, values := range res.Header {
-			switch name {
-			case
-				"Etag",
-				"Last-Modified",
-				"Cache-Control",
-				"Content-Type",
-				"Content-Language",
-				"Content-Disposition":
-				w.Header()[name] = values
-			}
-		}
+		setHeaders(w.Header())
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
+		w.Header()["Content-Type"] = res.Header["Content-Type"]
+		w.Header()["Content-Language"] = res.Header["Content-Language"]
+		w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
 
 		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
-			return sendBlob(w, r, bucket, object, etag, lastModified)
+			return sendBlob(w, r, bucket, object, etag, lastModified, true)
 		} else {
 			return sendEncodedBlob(w, gcs, bucket, object)
 		}
@@ -149,17 +133,17 @@ func checkMethod(w http.ResponseWriter, r *http.Request) int {
 	return 0
 }
 
-func checkConditions(r *http.Request, etag string, lastModified string) int {
+func checkConditions(r *http.Request, etag string, lastModified string, mutable bool) int {
 	modified, err := http.ParseTime(lastModified)
 
 	if etag == "" || etag[0] != '"' || err != nil {
 		return http.StatusInternalServerError
 	}
 
-	if headers, ok := r.Header["If-Match"]; ok {
+	if matchers, ok := r.Header["If-Match"]; ok {
 		match := false
-		for _, header := range headers {
-			if header == "*" || strings.Contains(header, etag) {
+		for _, matcher := range matchers {
+			if matcher == "*" || strings.Contains(matcher, etag) && !mutable {
 				match = true
 				break
 			}
@@ -169,15 +153,15 @@ func checkConditions(r *http.Request, etag string, lastModified string) int {
 		}
 	} else {
 		since, err := http.ParseTime(r.Header.Get("If-Unmodified-Since"))
-		if err == nil && modified.After(since) {
+		if err == nil && (modified.After(since) || mutable) {
 			return http.StatusPreconditionFailed
 		}
 	}
 
-	if headers, ok := r.Header["If-None-Match"]; ok {
+	if matchers, ok := r.Header["If-None-Match"]; ok {
 		match := false
-		for _, header := range headers {
-			if header == "*" || strings.Contains(header, etag) {
+		for _, matcher := range matchers {
+			if matcher == "*" || strings.Contains(matcher, etag) {
 				match = true
 				break
 			}
@@ -195,8 +179,7 @@ func checkConditions(r *http.Request, etag string, lastModified string) int {
 	return 0
 }
 
-func sendHeaders(w http.ResponseWriter) {
-	h := w.Header()
+func setHeaders(h http.Header) {
 	h.Set("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval'")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	h.Set("Strict-Transport-Security", "max-age=86400")
@@ -206,16 +189,18 @@ func sendHeaders(w http.ResponseWriter) {
 	h.Set("X-XSS-Protection", "1; mode=block")
 }
 
-func sendBlob(w http.ResponseWriter, r *http.Request, bucket string, object string, etag string, modified string) HttpResult {
+func sendBlob(w http.ResponseWriter, r *http.Request, bucket string, object string, etag string, modified string, mutable bool) HttpResult {
 	key, err := blobstore.BlobKeyForFile(r.Context(), "/gs/"+bucket+object)
 	if err != nil {
 		return HttpResult{Status: http.StatusInternalServerError}
 	}
 
-	header := r.Header.Get("Range")
-	if len(header) > 0 {
+	if header := r.Header.Get("Range"); len(header) > 0 {
 		condition := r.Header.Get("If-Range")
 		if len(condition) != 0 && condition != etag && condition != modified {
+			header = ""
+		}
+		if mutable {
 			header = ""
 		}
 		w.Header().Set("X-AppEngine-BlobRange", header)
@@ -256,16 +241,9 @@ func sendNotFound(w http.ResponseWriter, gcs *http.Client, bucket string) HttpRe
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	for name, values := range res.Header {
-		switch name {
-		case
-			"Content-Type",
-			"Content-Language",
-			"Content-Disposition":
-			w.Header()[name] = values
-		}
-	}
-
+	w.Header()["Content-Type"] = res.Header["Content-Type"]
+	w.Header()["Content-Language"] = res.Header["Content-Language"]
+	w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
 	w.WriteHeader(http.StatusNotFound)
 	io.Copy(w, res.Body)
 	return HttpResult{}
