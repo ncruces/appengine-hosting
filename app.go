@@ -180,7 +180,7 @@ func checkConditions(r *http.Request, etag string, lastModified string, mutable 
 }
 
 func setHeaders(h http.Header) {
-	h.Set("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval'")
+	h.Set("Content-Security-Policy", "default-src * 'unsafe-eval' 'unsafe-inline' data: blob: filesystem: about: ws: wss:")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	h.Set("Strict-Transport-Security", "max-age=86400")
 	h.Set("X-Content-Type-Options", "nosniff")
