@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -8,24 +9,39 @@ import (
 	"google.golang.org/appengine/urlfetch"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 var websites = map[string]WebsiteConfiguration{}
+var firebase = map[string]FirebaseConfiguration{}
 
 type WebsiteConfiguration struct {
 	MainPageSuffix string
 	NotFoundPage   string
 }
 
+func init() {
+	f, err := os.Open("firebase.json")
+	if err == nil {
+		defer f.Close()
+		json.NewDecoder(f).Decode(&firebase)
+	}
+}
+
 func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
-	if result := checkMethod(w, r); result >= 400 {
-		return HttpResult{Status: result}
+	if code := checkMethod(w, r); code >= 400 {
+		return HttpResult{Status: code}
 	}
 
 	bucket := r.URL.Hostname()
 	object := r.URL.EscapedPath()
+	config := firebase[bucket]
+
+	if res := config.processRedirects(r.URL.Path); res.Status != 0 {
+		return res
+	}
 
 	gcs := &http.Client{
 		Transport: &oauth2.Transport{
@@ -34,12 +50,8 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 		},
 	}
 
-	if !initWebsite(gcs, bucket) {
-		if !strings.HasPrefix(bucket, "www.") && initWebsite(gcs, "www."+bucket) {
-			r.URL.Host = "www." + r.URL.Host
-			return HttpResult{Status: http.StatusMovedPermanently, Location: r.URL.String()}
-		}
-		return HttpResult{Status: http.StatusNotFound}
+	if code := initWebsite(gcs, bucket); code >= 400 {
+		return HttpResult{Status: code}
 	}
 
 	res, object := getMetadata(gcs, bucket, object)
@@ -59,14 +71,14 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 	etag := res.Header.Get("Etag")
 	lastModified := res.Header.Get("Last-Modified")
-	check := checkConditions(r, etag, lastModified, true)
+	code := checkConditions(r, etag, lastModified, true)
 
-	if check >= 400 {
-		return HttpResult{Status: check}
+	if code >= 400 {
+		return HttpResult{Status: code}
 	}
-	if check == http.StatusNotModified {
+	if code == http.StatusNotModified {
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
-		return HttpResult{Status: check}
+		return HttpResult{Status: code}
 	} else {
 		setHeaders(w.Header())
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
@@ -83,24 +95,27 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 	}
 }
 
-func initWebsite(gcs *http.Client, bucket string) bool {
+func initWebsite(gcs *http.Client, bucket string) int {
 	var config WebsiteConfiguration
 
 	if _, ok := websites[bucket]; ok {
-		return true
+		return 0
 	}
 
 	res, _ := gcs.Get("https://storage.googleapis.com/" + bucket + "?websiteConfig")
-
 	if res != nil {
 		defer res.Body.Close()
-	}
-	if res == nil || res.StatusCode != http.StatusOK || xml.NewDecoder(res.Body).Decode(&config) != nil {
-		return false
+
+		if res.StatusCode >= 400 {
+			return res.StatusCode
+		}
+		if res.StatusCode == http.StatusOK && xml.NewDecoder(res.Body).Decode(&config) == nil {
+			websites[bucket] = config
+			return 0
+		}
 	}
 
-	websites[bucket] = config
-	return true
+	return http.StatusInternalServerError
 }
 
 func getMetadata(gcs *http.Client, bucket string, object string) (*http.Response, string) {

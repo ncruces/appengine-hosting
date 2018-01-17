@@ -22,7 +22,6 @@ You should now be able to use HTTPS to access the website.
 
 * Website configuration for the bucket (Main page, and 404 page) is respected by default.
 * Multiple domains can be mapped to the app, content will be served from the corresponding buckets.
-* If you map `example.com` to the app and no `example.com` bucket exists, a redirect to `www.example.com` is issued (if that bucket exists).
 * All HTTP traffic is 301 redirected to HTTPS (see [app.yaml](app.yaml))
 * This [issue](https://cloud.google.com/storage/docs/static-website#empty-obj) is fixed.
 * This [issue](https://issuetracker.google.com/issues/70223986) means compressed objects in Cloud Storage larger than 32Mb are not supported (don't use `gsutil -z` or `-Z` to upload them).
