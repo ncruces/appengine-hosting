@@ -44,7 +44,7 @@ func (h ContextHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if hr.Status >= 100 {
-		w.WriteHeader(http.StatusNotModified)
+	if hr.Status != 0 {
+		w.WriteHeader(hr.Status)
 	}
 }
