@@ -48,3 +48,17 @@ func (c FirebaseConfiguration) processRewrites(path string) string {
 	}
 	return path
 }
+
+func (c FirebaseConfiguration) processHeaders(path string, header http.Header) {
+	for _, headers := range c.Headers {
+		pattern, err := CompileExtGlob(headers.Source)
+		if err != nil {
+			return
+		}
+		if pattern.MatchString(path) {
+			for _, h := range headers.Headers {
+				header.Set(h.Key, h.Value)
+			}
+		}
+	}
+}

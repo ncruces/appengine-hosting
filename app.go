@@ -81,12 +81,12 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
 		return HttpResult{Status: code}
 	} else {
-		setHeaders(w.Header())
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
 		w.Header()["Content-Type"] = res.Header["Content-Type"]
 		w.Header()["Content-Language"] = res.Header["Content-Language"]
 		w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
+		ctx.setHeaders()
 
 		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
 			return ctx.sendBlob(etag, lastModified, true)
@@ -230,7 +230,8 @@ func checkConditions(r *http.Request, etag string, lastModified string, mutable 
 	return 0
 }
 
-func setHeaders(h http.Header) {
+func (ctx *HandlerContext) setHeaders() {
+	h := ctx.w.Header()
 	h.Set("Content-Security-Policy", "default-src * 'unsafe-eval' 'unsafe-inline' data: blob: filesystem: about: ws: wss:")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	h.Set("Strict-Transport-Security", "max-age=86400")
@@ -238,9 +239,10 @@ func setHeaders(h http.Header) {
 	h.Set("X-Download-Options", "noopen")
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	h.Set("X-XSS-Protection", "1; mode=block")
+	ctx.firebase.processHeaders(ctx.r.URL.Path, h)
 }
 
-func (ctx HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
+func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
 	key, err := blobstore.BlobKeyForFile(ctx.r.Context(), "/gs/"+ctx.bucket+ctx.object)
 	if err != nil {
 		return HttpResult{Status: http.StatusInternalServerError}
@@ -261,7 +263,7 @@ func (ctx HandlerContext) sendBlob(etag string, modified string, mutable bool) H
 	return HttpResult{}
 }
 
-func (ctx HandlerContext) sendEncodedBlob() HttpResult {
+func (ctx *HandlerContext) sendEncodedBlob() HttpResult {
 	res, _ := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
 
 	if res != nil {
@@ -275,7 +277,7 @@ func (ctx HandlerContext) sendEncodedBlob() HttpResult {
 	return HttpResult{}
 }
 
-func (ctx HandlerContext) sendNotFound() HttpResult {
+func (ctx *HandlerContext) sendNotFound() HttpResult {
 	notFoundPage := "/" + ctx.website.NotFoundPage
 
 	if len(notFoundPage) <= 1 {
