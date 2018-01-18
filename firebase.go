@@ -35,3 +35,16 @@ func (c FirebaseConfiguration) processRedirects(path string) HttpResult {
 	}
 	return HttpResult{}
 }
+
+func (c FirebaseConfiguration) processRewrites(path string) string {
+	for _, rewrite := range c.Rewrites {
+		pattern, err := CompileExtGlob(rewrite.Source)
+		if err != nil {
+			return ""
+		}
+		if pattern.MatchString(path) {
+			return rewrite.Destination
+		}
+	}
+	return path
+}

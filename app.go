@@ -145,17 +145,35 @@ func (ctx *HandlerContext) getMetadata() *http.Response {
 		ctx.object = mainPageSuffix
 	}
 	if len(ctx.object) <= 1 || ctx.object == notFoundPage {
+		if r := ctx.getRewriteMetadata(ctx.firebase.processRewrites(ctx.r.URL.Path)); r != nil {
+			return r
+		}
 		return &http.Response{StatusCode: http.StatusNotFound}
 	}
 
 	res, _ := ctx.gcs.Head("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
 
 	if res != nil && (res.StatusCode == http.StatusNotFound || strings.HasSuffix(ctx.object, "/") && res.Header.Get("x-goog-stored-content-length") == "0") {
-		ctx.object = strings.TrimRight(ctx.object, "/") + mainPageSuffix
-		res, _ = ctx.gcs.Head("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
+		if r := ctx.getRewriteMetadata(strings.TrimRight(ctx.object, "/") + mainPageSuffix); r != nil {
+			return r
+		}
+		if r := ctx.getRewriteMetadata(ctx.firebase.processRewrites(ctx.r.URL.Path)); r != nil {
+			return r
+		}
 	}
 
 	return res
+}
+
+func (ctx *HandlerContext) getRewriteMetadata(rewrite string) *http.Response {
+	if rewrite != "" && rewrite != ctx.object {
+		res, _ := ctx.gcs.Head("https://storage.googleapis.com/" + ctx.bucket + rewrite)
+		if res != nil && res.StatusCode == http.StatusOK {
+			ctx.object = rewrite
+			return res
+		}
+	}
+	return nil
 }
 
 func checkMethod(w http.ResponseWriter, r *http.Request) int {
