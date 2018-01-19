@@ -89,7 +89,7 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
 			return ctx.sendBlob(etag, lastModified, true)
 		} else {
-			return ctx.sendEncodedBlob()
+			return ctx.sendBlobBody()
 		}
 	}
 }
@@ -189,12 +189,81 @@ func (ctx *HandlerContext) getRewriteMetadata(rewrite string) *http.Response {
 	return nil
 }
 
-func checkMethod(w http.ResponseWriter, r *http.Request) int {
-	if r.Method != "GET" && r.Method != "HEAD" {
-		w.Header().Set("Allow", "GET, HEAD")
-		return http.StatusMethodNotAllowed
+func (ctx *HandlerContext) setHeaders() {
+	h := ctx.w.Header()
+	h.Set("Content-Security-Policy", "default-src * 'unsafe-eval' 'unsafe-inline' data: blob: filesystem: about: ws: wss:")
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("Strict-Transport-Security", "max-age=86400")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Download-Options", "noopen")
+	h.Set("X-Frame-Options", "SAMEORIGIN")
+	h.Set("X-XSS-Protection", "1; mode=block")
+	ctx.firebase.processHeaders(ctx.r.URL.Path, h)
+}
+
+func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
+	key, err := blobstore.BlobKeyForFile(ctx.r.Context(), "/gs/"+ctx.bucket+ctx.object)
+	if err != nil {
+		log.Errorf(ctx.r.Context(), "BlobKeyForFile /gs/%s: %v", ctx.bucket+ctx.object, err)
+		return HttpResult{Status: http.StatusInternalServerError}
 	}
-	return 0
+
+	if header := ctx.r.Header.Get("Range"); len(header) > 0 {
+		condition := ctx.r.Header.Get("If-Range")
+		if len(condition) != 0 && condition != etag && condition != modified {
+			header = ""
+		}
+		if mutable {
+			header = ""
+		}
+		ctx.w.Header().Set("X-AppEngine-BlobRange", header)
+	}
+
+	ctx.w.Header().Set("X-AppEngine-BlobKey", string(key))
+	return HttpResult{}
+}
+
+func (ctx *HandlerContext) sendBlobBody() HttpResult {
+	res, err := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
+
+	if err != nil {
+		log.Errorf(ctx.r.Context(), "GET %s: %v", ctx.bucket+ctx.object, err)
+		return HttpResult{Status: http.StatusInternalServerError}
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		log.Errorf(ctx.r.Context(), "GET %s: %s", ctx.bucket+ctx.object, http.StatusText(res.StatusCode))
+		return HttpResult{Status: http.StatusInternalServerError}
+	}
+
+	io.Copy(ctx.w, res.Body)
+	return HttpResult{}
+}
+
+func (ctx *HandlerContext) sendNotFound() HttpResult {
+	notFoundPage := "/" + ctx.website.NotFoundPage
+
+	if len(notFoundPage) <= 1 {
+		return HttpResult{Status: http.StatusNotFound}
+	}
+
+	res, _ := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + notFoundPage)
+
+	if res != nil {
+		defer res.Body.Close()
+	}
+	if res == nil || res.StatusCode != http.StatusOK {
+		return HttpResult{Status: http.StatusNotFound}
+	}
+
+	ctx.w.Header()["Content-Type"] = res.Header["Content-Type"]
+	ctx.w.Header()["Content-Language"] = res.Header["Content-Language"]
+	ctx.w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
+	ctx.w.WriteHeader(http.StatusNotFound)
+	io.Copy(ctx.w, res.Body)
+	return HttpResult{}
 }
 
 func checkConditions(r *http.Request, etag string, lastModified string, mutable bool) int {
@@ -244,79 +313,10 @@ func checkConditions(r *http.Request, etag string, lastModified string, mutable 
 	return 0
 }
 
-func (ctx *HandlerContext) setHeaders() {
-	h := ctx.w.Header()
-	h.Set("Content-Security-Policy", "default-src * 'unsafe-eval' 'unsafe-inline' data: blob: filesystem: about: ws: wss:")
-	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	h.Set("Strict-Transport-Security", "max-age=86400")
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("X-Download-Options", "noopen")
-	h.Set("X-Frame-Options", "SAMEORIGIN")
-	h.Set("X-XSS-Protection", "1; mode=block")
-	ctx.firebase.processHeaders(ctx.r.URL.Path, h)
-}
-
-func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
-	key, err := blobstore.BlobKeyForFile(ctx.r.Context(), "/gs/"+ctx.bucket+ctx.object)
-	if err != nil {
-		log.Errorf(ctx.r.Context(), "BlobKeyForFile /gs/%s: %v", ctx.bucket+ctx.object, err)
-		return HttpResult{Status: http.StatusInternalServerError}
+func checkMethod(w http.ResponseWriter, r *http.Request) int {
+	if r.Method != "GET" && r.Method != "HEAD" {
+		w.Header().Set("Allow", "GET, HEAD")
+		return http.StatusMethodNotAllowed
 	}
-
-	if header := ctx.r.Header.Get("Range"); len(header) > 0 {
-		condition := ctx.r.Header.Get("If-Range")
-		if len(condition) != 0 && condition != etag && condition != modified {
-			header = ""
-		}
-		if mutable {
-			header = ""
-		}
-		ctx.w.Header().Set("X-AppEngine-BlobRange", header)
-	}
-
-	ctx.w.Header().Set("X-AppEngine-BlobKey", string(key))
-	return HttpResult{}
-}
-
-func (ctx *HandlerContext) sendEncodedBlob() HttpResult {
-	res, err := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
-
-	if err != nil {
-		log.Errorf(ctx.r.Context(), "GET %s: %v", ctx.bucket+ctx.object, err)
-		return HttpResult{Status: http.StatusInternalServerError}
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		log.Errorf(ctx.r.Context(), "GET %s: %s", ctx.bucket+ctx.object, http.StatusText(res.StatusCode))
-		return HttpResult{Status: http.StatusInternalServerError}
-	}
-
-	io.Copy(ctx.w, res.Body)
-	return HttpResult{}
-}
-
-func (ctx *HandlerContext) sendNotFound() HttpResult {
-	notFoundPage := "/" + ctx.website.NotFoundPage
-
-	if len(notFoundPage) <= 1 {
-		return HttpResult{Status: http.StatusNotFound}
-	}
-
-	res, _ := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + notFoundPage)
-
-	if res != nil {
-		defer res.Body.Close()
-	}
-	if res == nil || res.StatusCode != http.StatusOK {
-		return HttpResult{Status: http.StatusNotFound}
-	}
-
-	ctx.w.Header()["Content-Type"] = res.Header["Content-Type"]
-	ctx.w.Header()["Content-Language"] = res.Header["Content-Language"]
-	ctx.w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
-	ctx.w.WriteHeader(http.StatusNotFound)
-	io.Copy(ctx.w, res.Body)
-	return HttpResult{}
+	return 0
 }
