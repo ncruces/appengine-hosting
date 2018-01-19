@@ -21,10 +21,6 @@ func (h ContextHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hr := h(w, r.WithContext(appengine.NewContext(r)))
 
 	if hr.Location != "" {
-		h := w.Header()
-		for k := range h {
-			delete(h, k)
-		}
 		if hr.Status == 0 {
 			hr.Status = http.StatusTemporaryRedirect
 		}

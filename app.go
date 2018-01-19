@@ -51,7 +51,7 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 	ctx := makeContext(w, r)
 
-	if res := ctx.firebase.processRedirects(r.URL.Path); res.Status != 0 {
+	if res := ctx.processRedirects(); res.Status != 0 {
 		return res
 	}
 
@@ -79,13 +79,13 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
 		return HttpResult{Status: code}
 	} else {
-		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
 		w.Header()["Content-Type"] = res.Header["Content-Type"]
 		w.Header()["Content-Language"] = res.Header["Content-Language"]
 		w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
-		ctx.setHeaders()
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 
+		ctx.setHeaders()
 		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
 			return ctx.sendBlob(etag, lastModified, true)
 		} else {
@@ -190,15 +190,17 @@ func (ctx *HandlerContext) getRewriteMetadata(rewrite string) *http.Response {
 }
 
 func (ctx *HandlerContext) setHeaders() {
-	h := ctx.w.Header()
-	h.Set("Content-Security-Policy", "default-src * 'unsafe-eval' 'unsafe-inline' data: blob: filesystem: about: ws: wss:")
-	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	h.Set("Strict-Transport-Security", "max-age=86400")
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("X-Download-Options", "noopen")
-	h.Set("X-Frame-Options", "SAMEORIGIN")
-	h.Set("X-XSS-Protection", "1; mode=block")
-	ctx.firebase.processHeaders(ctx.r.URL.Path, h)
+	setHeaders(ctx.w.Header())
+	ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
+}
+
+func (ctx *HandlerContext) processRedirects() HttpResult {
+	res := ctx.firebase.processRedirects(ctx.r.URL.Path)
+	if res.Status != 0 {
+		setHeaders(ctx.w.Header())
+		ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
+	}
+	return res
 }
 
 func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
@@ -249,18 +251,26 @@ func (ctx *HandlerContext) sendNotFound() HttpResult {
 		return HttpResult{Status: http.StatusNotFound}
 	}
 
-	res, _ := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + notFoundPage)
+	res, err := ctx.gcs.Get("https://storage.googleapis.com/" + ctx.bucket + notFoundPage)
 
-	if res != nil {
-		defer res.Body.Close()
+	if err != nil {
+		log.Errorf(ctx.r.Context(), "GET %s: %v", ctx.bucket+notFoundPage, err)
+		return HttpResult{Status: http.StatusInternalServerError}
 	}
-	if res == nil || res.StatusCode != http.StatusOK {
-		return HttpResult{Status: http.StatusNotFound}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		log.Errorf(ctx.r.Context(), "GET %s: %s", ctx.bucket+notFoundPage, http.StatusText(res.StatusCode))
+		return HttpResult{Status: http.StatusInternalServerError}
 	}
 
 	ctx.w.Header()["Content-Type"] = res.Header["Content-Type"]
 	ctx.w.Header()["Content-Language"] = res.Header["Content-Language"]
 	ctx.w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
+
+	setHeaders(ctx.w.Header())
+	ctx.firebase.processHeaders(notFoundPage, ctx.w.Header())
 	ctx.w.WriteHeader(http.StatusNotFound)
 	io.Copy(ctx.w, res.Body)
 	return HttpResult{}
@@ -319,4 +329,13 @@ func checkMethod(w http.ResponseWriter, r *http.Request) int {
 		return http.StatusMethodNotAllowed
 	}
 	return 0
+}
+
+func setHeaders(h http.Header) {
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("Strict-Transport-Security", "max-age=86400")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Download-Options", "noopen")
+	h.Set("X-Frame-Options", "SAMEORIGIN")
+	h.Set("X-XSS-Protection", "1; mode=block")
 }
