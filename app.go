@@ -45,14 +45,14 @@ type HandlerContext struct {
 }
 
 func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
-	if code := checkMethod(w, r); code >= 400 {
+	if code := checkMethod(w, r); code != 0 {
 		return HttpResult{Status: code}
 	}
 
 	ctx := makeContext(w, r)
 
-	if res := ctx.processRedirects(); res.Status != 0 {
-		return res
+	if code, location := ctx.processRedirects(); code != 0 {
+		return HttpResult{Status: code, Location: location}
 	}
 
 	if ctx.initWebsite() != nil {
@@ -72,25 +72,24 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 	lastModified := res.Header.Get("Last-Modified")
 	code := checkConditions(r, etag, lastModified, true)
 
-	if code >= 400 {
-		return HttpResult{Status: code}
-	}
 	if code == http.StatusNotModified {
 		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
+	}
+	if code != 0 {
 		return HttpResult{Status: code}
-	} else {
-		w.Header()["Cache-Control"] = res.Header["Cache-Control"]
-		w.Header()["Content-Type"] = res.Header["Content-Type"]
-		w.Header()["Content-Language"] = res.Header["Content-Language"]
-		w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
-		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+	}
 
-		ctx.setHeaders()
-		if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
-			return ctx.sendBlob(etag, lastModified, true)
-		} else {
-			return ctx.sendBlobBody()
-		}
+	w.Header()["Cache-Control"] = res.Header["Cache-Control"]
+	w.Header()["Content-Type"] = res.Header["Content-Type"]
+	w.Header()["Content-Language"] = res.Header["Content-Language"]
+	w.Header()["Content-Disposition"] = res.Header["Content-Disposition"]
+	w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+
+	ctx.setHeaders()
+	if res.Header.Get("x-goog-stored-content-encoding") == "identity" {
+		return ctx.sendBlob(etag, lastModified, true)
+	} else {
+		return ctx.sendBlobBody()
 	}
 }
 
@@ -194,13 +193,13 @@ func (ctx *HandlerContext) setHeaders() {
 	ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
 }
 
-func (ctx *HandlerContext) processRedirects() HttpResult {
-	res := ctx.firebase.processRedirects(ctx.r.URL.Path)
-	if res.Status != 0 {
+func (ctx *HandlerContext) processRedirects() (int, string) {
+	code, location := ctx.firebase.processRedirects(ctx.r.URL.Path)
+	if code != 0 {
 		setHeaders(ctx.w.Header())
 		ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
 	}
-	return res
+	return code, location
 }
 
 func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {

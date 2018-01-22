@@ -23,17 +23,20 @@ type FirebaseConfiguration struct {
 	} `json:"headers"`
 }
 
-func (c FirebaseConfiguration) processRedirects(path string) HttpResult {
+func (c FirebaseConfiguration) processRedirects(path string) (int, string) {
 	for _, redirect := range c.Redirects {
 		pattern, err := CompileExtGlob(redirect.Source)
 		if err != nil {
-			return HttpResult{Status: http.StatusInternalServerError}
+			return http.StatusInternalServerError, ""
 		}
 		if pattern.MatchString(path) {
-			return HttpResult{Status: redirect.Type, Location: redirect.Destination}
+			if redirect.Type == 0 {
+				return http.StatusMovedPermanently, redirect.Destination
+			}
+			return redirect.Type, redirect.Destination
 		}
 	}
-	return HttpResult{}
+	return 0, ""
 }
 
 func (c FirebaseConfiguration) processRewrites(path string) string {
