@@ -51,8 +51,8 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 	ctx := makeContext(w, r)
 
-	if code, location := ctx.processRedirects(); code != 0 {
-		return HttpResult{Status: code, Location: location}
+	if code, location := ctx.doRedirects(); code != 0 {
+		return HttpResult{Status: code, Location: location + ctx.getQuery()}
 	}
 
 	if ctx.initWebsite() != nil {
@@ -188,12 +188,20 @@ func (ctx *HandlerContext) getRewriteMetadata(rewrite string) *http.Response {
 	return nil
 }
 
+func (ctx *HandlerContext) getQuery() string {
+	query := ctx.r.URL.Query()
+	if len(query) == 0 {
+		return ""
+	}
+	return "?" + query.Encode()
+}
+
 func (ctx *HandlerContext) setHeaders() {
 	setHeaders(ctx.w.Header())
 	ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
 }
 
-func (ctx *HandlerContext) processRedirects() (int, string) {
+func (ctx *HandlerContext) doRedirects() (int, string) {
 	code, location := ctx.firebase.processRedirects(ctx.r.URL.Path)
 	if code != 0 {
 		setHeaders(ctx.w.Header())
