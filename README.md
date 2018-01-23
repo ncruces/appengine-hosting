@@ -29,4 +29,4 @@ You should now be able to use HTTPS to access the website.
 
 ### Future work
 
-Functionality equivalent to [Firebase Hosting](https://firebase.google.com/docs/hosting/url-redirects-rewrites) is planned.
+Functionality equivalent to [Firebase Hosting](https://firebase.google.com/docs/hosting/url-redirects-rewrites) is a work in progress. In particular, [Capture Redirects](https://firebase.google.com/docs/hosting/full-config#redirects) are not implemented.
