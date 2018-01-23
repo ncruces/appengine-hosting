@@ -21,6 +21,8 @@ type FirebaseConfiguration struct {
 			Value string `json:"value"`
 		} `json:"headers"`
 	} `json:"headers"`
+	CleanUrls     bool  `json:"cleanUrls"`
+	TrailingSlash *bool `json:"trailingSlash"`
 }
 
 func (c FirebaseConfiguration) processRedirects(path string) (int, string) {

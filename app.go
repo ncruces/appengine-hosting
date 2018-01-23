@@ -51,12 +51,16 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 
 	ctx := makeContext(w, r)
 
-	if code, location := ctx.doRedirects(); code != 0 {
+	if code, location := ctx.getRedirect(); code != 0 {
 		return HttpResult{Status: code, Location: location + ctx.getQuery()}
 	}
 
 	if ctx.initWebsite() != nil {
 		return HttpResult{Status: http.StatusInternalServerError}
+	}
+
+	if location := ctx.getCleanUrl(); location != "" {
+		return HttpResult{Status: http.StatusMovedPermanently, Location: location + ctx.getQuery()}
 	}
 
 	res := ctx.getMetadata()
@@ -154,6 +158,9 @@ func (ctx *HandlerContext) getMetadata() *http.Response {
 		}
 		return &http.Response{StatusCode: http.StatusNotFound}
 	}
+	if ctx.firebase.TrailingSlash != nil {
+		ctx.object = strings.TrimRight(ctx.object, "/")
+	}
 
 	res, err := ctx.gcs.Head("https://storage.googleapis.com/" + ctx.bucket + ctx.object)
 
@@ -164,6 +171,11 @@ func (ctx *HandlerContext) getMetadata() *http.Response {
 	if res.StatusCode == http.StatusNotFound || strings.HasSuffix(ctx.object, "/") && res.Header.Get("x-goog-stored-content-length") == "0" {
 		if r := ctx.getRewriteMetadata(strings.TrimRight(ctx.object, "/") + mainPageSuffix); r != nil {
 			return r
+		}
+		if ctx.firebase.CleanUrls {
+			if r := ctx.getRewriteMetadata(strings.TrimRight(ctx.object, "/") + ".html"); r != nil {
+				return r
+			}
 		}
 		if r := ctx.getRewriteMetadata(ctx.firebase.processRewrites(ctx.r.URL.Path)); r != nil {
 			return r
@@ -188,6 +200,32 @@ func (ctx *HandlerContext) getRewriteMetadata(rewrite string) *http.Response {
 	return nil
 }
 
+func (ctx *HandlerContext) getRedirect() (int, string) {
+	return ctx.firebase.processRedirects(ctx.r.URL.Path)
+}
+
+func (ctx *HandlerContext) getCleanUrl() string {
+	path := ctx.r.URL.Path
+
+	if ctx.firebase.CleanUrls {
+		path = strings.TrimSuffix(path, ctx.website.MainPageSuffix)
+		path = strings.TrimSuffix(path, ".html")
+	}
+
+	if ctx.firebase.TrailingSlash != nil {
+		path = strings.TrimRight(path, "/")
+		if *ctx.firebase.TrailingSlash {
+			path = path + "/"
+		}
+	}
+
+	if path != ctx.r.URL.Path {
+		return path
+	}
+
+	return ""
+}
+
 func (ctx *HandlerContext) getQuery() string {
 	query := ctx.r.URL.Query()
 	if len(query) == 0 {
@@ -199,15 +237,6 @@ func (ctx *HandlerContext) getQuery() string {
 func (ctx *HandlerContext) setHeaders() {
 	setHeaders(ctx.w.Header())
 	ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
-}
-
-func (ctx *HandlerContext) doRedirects() (int, string) {
-	code, location := ctx.firebase.processRedirects(ctx.r.URL.Path)
-	if code != 0 {
-		setHeaders(ctx.w.Header())
-		ctx.firebase.processHeaders(ctx.r.URL.Path, ctx.w.Header())
-	}
-	return code, location
 }
 
 func (ctx *HandlerContext) sendBlob(etag string, modified string, mutable bool) HttpResult {
