@@ -41,6 +41,7 @@ func Test_CompileExtGlob(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Couldn’t compile glob %s: %s", entry.Glob, err)
 		}
+		t.Logf("Compiled glob %s: %s", entry.Glob, r)
 		for _, match := range entry.Matches {
 			if !r.MatchString(match) {
 				t.Fatalf("%s didn’t match %s", entry.Glob, match)
