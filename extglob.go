@@ -29,7 +29,7 @@ func (c *globctx) compileExpression() error {
 		switch c.glob[0] {
 		case '\\':
 			if len(c.glob) == 1 {
-				return &syntax.Error{syntax.ErrTrailingBackslash, c.glob}
+				return &syntax.Error{Code: syntax.ErrTrailingBackslash, Expr: c.glob}
 			}
 			c.regexp.WriteString(c.glob[0:2])
 			c.glob = c.glob[2:]
@@ -92,7 +92,7 @@ func (c *globctx) compileExpression() error {
 		case '!':
 			switch {
 			case len(c.glob) >= 1 && c.glob[1] == '(':
-				return &syntax.Error{syntax.ErrInternalError, c.glob}
+				return &syntax.Error{Code: syntax.ErrInternalError, Expr: c.glob}
 
 			default:
 				c.regexp.WriteString("\\!")
@@ -138,7 +138,7 @@ func (c *globctx) compileExpression() error {
 	}
 
 	if c.depth > 0 {
-		return &syntax.Error{syntax.ErrMissingParen, c.glob}
+		return &syntax.Error{Code: syntax.ErrMissingParen, Expr: c.glob}
 	}
 	return nil
 }
@@ -179,7 +179,7 @@ Loop:
 		switch c.glob[0] {
 		case '\\':
 			if len(c.glob) == 1 {
-				return &syntax.Error{syntax.ErrTrailingBackslash, c.glob}
+				return &syntax.Error{Code: syntax.ErrTrailingBackslash, Expr: c.glob}
 			}
 			c.regexp.WriteString(c.glob[0:2])
 			c.glob = c.glob[2:]
@@ -193,5 +193,5 @@ Loop:
 		}
 	}
 
-	return &syntax.Error{syntax.ErrMissingBracket, c.glob}
+	return &syntax.Error{Code: syntax.ErrMissingBracket, Expr: c.glob}
 }
