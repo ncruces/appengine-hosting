@@ -36,13 +36,13 @@ func (c *globctx) compileExpression() error {
 
 		case '*':
 			switch {
-			case len(c.glob) >= 1 && c.glob[1] == '(':
+			case len(c.glob) > 1 && c.glob[1] == '(':
 				if err := c.compileSubExpression(); err != nil {
 					return nil
 				}
 				c.regexp.WriteByte('*')
 
-			case len(c.glob) >= 1 && c.glob[1] == '*':
+			case len(c.glob) > 1 && c.glob[1] == '*':
 				c.regexp.WriteString(".*")
 				c.glob = c.glob[2:]
 
@@ -53,7 +53,7 @@ func (c *globctx) compileExpression() error {
 
 		case '?':
 			switch {
-			case len(c.glob) >= 1 && c.glob[1] == '(':
+			case len(c.glob) > 1 && c.glob[1] == '(':
 				if err := c.compileSubExpression(); err != nil {
 					return nil
 				}
@@ -66,7 +66,7 @@ func (c *globctx) compileExpression() error {
 
 		case '+':
 			switch {
-			case len(c.glob) >= 1 && c.glob[1] == '(':
+			case len(c.glob) > 1 && c.glob[1] == '(':
 				if err := c.compileSubExpression(); err != nil {
 					return nil
 				}
@@ -79,7 +79,7 @@ func (c *globctx) compileExpression() error {
 
 		case '@':
 			switch {
-			case len(c.glob) >= 1 && c.glob[1] == '(':
+			case len(c.glob) > 1 && c.glob[1] == '(':
 				if err := c.compileSubExpression(); err != nil {
 					return nil
 				}
@@ -91,7 +91,7 @@ func (c *globctx) compileExpression() error {
 
 		case '!':
 			switch {
-			case len(c.glob) >= 1 && c.glob[1] == '(':
+			case len(c.glob) > 1 && c.glob[1] == '(':
 				return &syntax.Error{Code: syntax.ErrInternalError, Expr: c.glob}
 
 			default:
