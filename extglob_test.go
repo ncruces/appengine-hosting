@@ -18,7 +18,7 @@ var (
 			NonMatches: []string{"asdf/asdf/asdf.jpg", "xxxasdf/asdf.jpgxxx"},
 		},
 		{
-			Glob:       "asdf/**.jpg",
+			Glob:       "asdf/**/*.jpg",
 			Matches:    []string{"asdf/asdf.jpg", "asdf/asdf_asdf.jpg", "asdf/asdf/asdf.jpg", "asdf/asdf/asdf/asdf/asdf.jpg"},
 			NonMatches: []string{"/asdf/asdf.jpg", "asdff/asdf.jpg", "xxxasdf/asdf.jpgxxx"},
 		},
@@ -30,7 +30,7 @@ var (
 		{
 			Glob:       "**/*.js",
 			Matches:    []string{"asdf/asdf.js", "asdf/asdf/asdfasdf_asdf.js", "/asdf/asdf.js", "/asdf/aasdf-asdf.2.1.4.js"},
-			NonMatches: []string{"/asdf/asdf.jpg", "asdf.js"},
+			NonMatches: []string{"/asdf/asdf.jpg", "asdf/asdf.jpg"},
 		},
 		{
 			Glob:       "ab*(e|f)",
@@ -136,6 +136,11 @@ var (
 			Glob:       "*[a-b].[a-b]*",
 			Matches:    []string{"a.a", "a.b", "a.a.a", "a.bb"},
 			NonMatches: []string{"c.a", "d.a.d", "a.ccc", "c.ccc"},
+		},
+		{
+			Glob:       "foo/**/",
+			Matches:    []string{"foo/", "foo/bar/baz/qux/"},
+			NonMatches: []string{"foo/bar", "foo/bazbar", "foo/barbar", "foo/bar/baz/qux"},
 		},
 	}
 )
