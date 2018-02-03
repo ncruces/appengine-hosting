@@ -29,7 +29,7 @@ var (
 		},
 		{
 			Glob:       "**/*.js",
-			Matches:    []string{"asdf/asdf.js", "asdf/asdf/asdfasdf_asdf.js", "/asdf/asdf.js", "/asdf/aasdf-asdf.2.1.4.js"},
+			Matches:    []string{"asdf/asdf.js", "asdf/asdf/asdfasdf_asdf.js", "asdf/asdf.js", "asdf/aasdf-asdf.2.1.4.js"},
 			NonMatches: []string{"/asdf/asdf.jpg", "asdf/asdf.jpg"},
 		},
 		{

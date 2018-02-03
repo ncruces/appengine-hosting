@@ -7,11 +7,11 @@ import (
 )
 
 var punct = regexp.MustCompile("[[:punct:]]")
-var any = regexp.MustCompile(".*")
+var globstar = regexp.MustCompile("^[^/]+(?:/[^/]*)*$")
 
 func CompileExtGlob(extglob string) (*regexp.Regexp, error) {
 	if extglob == "**" {
-		return any, nil
+		return globstar, nil
 	}
 
 	ctx := globctx{glob: extglob}
@@ -30,7 +30,7 @@ type globctx struct {
 
 func (c *globctx) compileExpression() error {
 	for c.depth == 0 && strings.HasPrefix(c.glob[c.pos:], "**/") {
-		c.regexp = append(c.regexp, "(?:[^/]*/)*"...)
+		c.regexp = append(c.regexp, "(?:[^/]+/(?:[^/]*/)*)?"...)
 		c.pos += 3
 	}
 
