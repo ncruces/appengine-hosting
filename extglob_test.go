@@ -122,6 +122,16 @@ var (
 			NonMatches: []string{"a"},
 		},
 		{
+			Glob:       "a*?(x)",
+			Matches:    []string{"a", "ab", "ax"},
+			NonMatches: []string{"ba"},
+		},
+		{
+			Glob:       "a?(x)",
+			Matches:    []string{"a", "ax"},
+			NonMatches: []string{"ab", "ba"},
+		},
+		{
 			Glob:       "?",
 			Matches:    []string{"a"},
 			NonMatches: []string{"aa", "aab"},
