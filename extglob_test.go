@@ -33,14 +33,49 @@ var (
 			NonMatches: []string{"/asdf/asdf.jpg", "asdf/asdf.jpg"},
 		},
 		{
-			Glob:       "ab*(e|f)",
-			Matches:    []string{"ab", "abef"},
-			NonMatches: []string{"abcdef", "abcfef", "abcfefg"},
+			Glob:       "ab**",
+			Matches:    []string{"ab", "abcdef", "abef", "abcfef"},
 		},
 		{
 			Glob:       "ab***ef",
 			Matches:    []string{"abcdef", "abcfef", "abef"},
 			NonMatches: []string{"ab", "abcfefg"},
+		},
+		{
+			Glob:       "ab**",
+			Matches:    []string{"ab", "abcdef", "abcfef", "abcfefg", "abef"},
+		},
+		{
+			Glob:       "ab?bc",
+			NonMatches: []string{"abbc", "abc"},
+		},
+		{
+			Glob:       "[a-d]*.[a-b]",
+			Matches:    []string{"a.a", "a.b", "c.a", "a.a.a"},
+		},
+		{
+			Glob:       "*.[a-b]",
+			Matches:    []string{"a.a", "a.b", "a.a.a", "c.a"},
+			NonMatches: []string{"d.a.d", "a.bb", "a.ccc", "c.ccc"},
+		},
+		{
+			Glob:       "*.[a-b]*",
+			Matches:    []string{"a.a", "a.b", "a.a.a", "c.a", "d.a.d", "a.bb"},
+			NonMatches: []string{"a.ccc", "c.ccc"},
+		},
+		{
+			Glob:       "*[a-b].[a-b]*",
+			Matches:    []string{"a.a", "a.b", "a.a.a", "a.bb"},
+			NonMatches: []string{"c.a", "d.a.d", "a.ccc", "c.ccc"},
+		},
+		{
+			Glob:       "[a-y]*[^c]",
+			Matches:    []string{"abd", "abe", "bb", "bcd", "ca", "cb", "dd", "de"},
+		},
+		{
+			Glob:       "ab*(e|f)",
+			Matches:    []string{"ab", "abef"},
+			NonMatches: []string{"abcdef", "abcfef", "abcfefg"},
 		},
 		{
 			Glob:       "*(f*(o))",
@@ -70,7 +105,6 @@ var (
 		{
 			Glob:       "@(b+(c)d|e*(f)g?|?(h)i@(j|k))",
 			Matches:    []string{"effgz", "efgz", "egz"},
-			NonMatches: []string{},
 		},
 		{
 			Glob:       "*(oxf+(ox))",
@@ -81,6 +115,11 @@ var (
 			Glob:       "a(*b",
 			Matches:    []string{"a(b", "a((b", "a((b"},
 			NonMatches: []string{"ab"},
+		},
+		{
+			Glob:       "b?(a|b)",
+			Matches:    []string{"ba"},
+			NonMatches: []string{"a"},
 		},
 		{
 			Glob:       "?",
@@ -98,9 +137,12 @@ var (
 			NonMatches: []string{"a", "aa", "aab"},
 		},
 		{
-			Glob:       "ab?*(e|f)",
-			Matches:    []string{"abef", "abcfef", "abd"},
-			NonMatches: []string{"123abc", "ab", "abcdef", "abcfefg", "acd"},
+			Glob:       "ab**(e|f)",
+			Matches:    []string{"ab", "abcdef", "abef", "abcfef"},
+		},
+		{
+			Glob:       "ab**(e|f)g",
+			NonMatches: []string{"ab", "abcdef", "abef", "abcfef"},
 		},
 		{
 			Glob:       "ab*+(e|f)",
@@ -108,13 +150,29 @@ var (
 			NonMatches: []string{"ab", "abcfefg"},
 		},
 		{
+			Glob:       "ab?*(e|f)",
+			Matches:    []string{"abef", "abcfef", "abd"},
+			NonMatches: []string{"123abc", "ab", "abcdef", "abcfefg", "acd"},
+		},
+		{
 			Glob:       "ab*d+(e|f)",
 			Matches:    []string{"abcdef"},
 			NonMatches: []string{"123abc", "ab", "abcfefg", "abef", "abcfef", "abd", "acd"},
 		},
 		{
+			Glob:       "(a+|b)+",
+			NonMatches: []string{"ab", "abcdef", "abcfefg", "abef", "abcfef", "abd", "acd"},
+		},
+		{
+			Glob:       "(a+|b)*",
+			NonMatches: []string{"b", "zz", "abcdef", "abcfefg", "abef", "abcfef", "abd", "acd"},
+		},
+		{
+			Glob:       "!*.(a|b)*",
+			NonMatches: []string{"a.a", "a.b", "a.a.a", "c.a", "d.a.d", "a.bb", "a.ccc"},
+		},
+		{
 			Glob:       "(a|d).(a|b)*",
-			Matches:    []string{},
 			NonMatches: []string{"a.a", "a.b", "a.bb"},
 		},
 		{
@@ -123,24 +181,69 @@ var (
 			NonMatches: []string{"a.a", "a.a.a", "c.a", "a.", "a.ccc"},
 		},
 		{
-			Glob:       "*.[a-b]",
-			Matches:    []string{"a.a", "a.b", "a.a.a", "c.a"},
-			NonMatches: []string{"d.a.d", "a.bb", "a.ccc", "c.ccc"},
+			Glob:       "a+(b|c)d",
+			Matches:    []string{"abd", "acd"},
+			NonMatches: []string{"abc"},
 		},
 		{
-			Glob:       "*.[a-b]*",
-			Matches:    []string{"a.a", "a.b", "a.a.a", "c.a", "d.a.d", "a.bb"},
-			NonMatches: []string{"a.ccc", "c.ccc"},
+			Glob:       "a[b*(foo|bar)]d",
+			Matches:    []string{"abd"},
+			NonMatches: []string{"abc", "acd"},
 		},
 		{
-			Glob:       "*[a-b].[a-b]*",
-			Matches:    []string{"a.a", "a.b", "a.a.a", "a.bb"},
-			NonMatches: []string{"c.a", "d.a.d", "a.ccc", "c.ccc"},
+			Glob:       "**/*.js",
+			Matches:    []string{"a.js", "a/a.js", "a/a/b.js"},
+		},
+		{
+			Glob:       "a/b/**/*.js",
+			Matches:    []string{"a/b/z.js", "a/b/c/z.js"},
+		},
+		{
+			Glob:       "**/*.md",
+			Matches:    []string{"foo.md", "foo/bar.md"},
+		},
+		{
+			Glob:       "**/*",
+			Matches:    []string{"ab/a/d", "ab/b", "a/b/c/d/a.js", "a/b/c.js", "a.js", "za.js", "ab", "a.b"},
 		},
 		{
 			Glob:       "foo/**/",
 			Matches:    []string{"foo/", "foo/bar/baz/qux/"},
 			NonMatches: []string{"foo/bar", "foo/bazbar", "foo/barbar", "foo/bar/baz/qux"},
+		},
+		{
+			Glob:       "a[^[:alnum:]]b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a[-.,:; _]b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a@([^[:alnum:]])b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a@([-.,:; _])b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a@([.])b",
+			Matches:    []string{"a.b"},
+			NonMatches: []string{"a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a@([^.])b",
+			Matches:    []string{"a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{"a.b"},
+		},
+		{
+			Glob:       "a+([^[:alnum:]])b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+		},
+		{
+			Glob:       "a@(.|[^[:alnum:]])b",
+			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
 		},
 	}
 )
