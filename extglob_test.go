@@ -35,6 +35,7 @@ var (
 		{
 			Glob:       "ab**",
 			Matches:    []string{"ab", "abcdef", "abef", "abcfef"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "ab***ef",
@@ -44,14 +45,17 @@ var (
 		{
 			Glob:       "ab**",
 			Matches:    []string{"ab", "abcdef", "abcfef", "abcfefg", "abef"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "ab?bc",
+			Matches:    []string{},
 			NonMatches: []string{"abbc", "abc"},
 		},
 		{
 			Glob:       "[a-d]*.[a-b]",
 			Matches:    []string{"a.a", "a.b", "c.a", "a.a.a"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "*.[a-b]",
@@ -71,6 +75,7 @@ var (
 		{
 			Glob:       "[a-y]*[^c]",
 			Matches:    []string{"abd", "abe", "bb", "bcd", "ca", "cb", "dd", "de"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "ab*(e|f)",
@@ -105,6 +110,7 @@ var (
 		{
 			Glob:       "@(b+(c)d|e*(f)g?|?(h)i@(j|k))",
 			Matches:    []string{"effgz", "efgz", "egz"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "*(oxf+(ox))",
@@ -149,9 +155,11 @@ var (
 		{
 			Glob:       "ab**(e|f)",
 			Matches:    []string{"ab", "abcdef", "abef", "abcfef"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "ab**(e|f)g",
+			Matches:    []string{},
 			NonMatches: []string{"ab", "abcdef", "abef", "abcfef"},
 		},
 		{
@@ -171,18 +179,22 @@ var (
 		},
 		{
 			Glob:       "(a+|b)+",
+			Matches:    []string{},
 			NonMatches: []string{"ab", "abcdef", "abcfefg", "abef", "abcfef", "abd", "acd"},
 		},
 		{
 			Glob:       "(a+|b)*",
+			Matches:    []string{},
 			NonMatches: []string{"b", "zz", "abcdef", "abcfefg", "abef", "abcfef", "abd", "acd"},
 		},
 		{
 			Glob:       "!*.(a|b)*",
+			Matches:    []string{},
 			NonMatches: []string{"a.a", "a.b", "a.a.a", "c.a", "d.a.d", "a.bb", "a.ccc"},
 		},
 		{
 			Glob:       "(a|d).(a|b)*",
+			Matches:    []string{},
 			NonMatches: []string{"a.a", "a.b", "a.bb"},
 		},
 		{
@@ -203,18 +215,22 @@ var (
 		{
 			Glob:       "**/*.js",
 			Matches:    []string{"a.js", "a/a.js", "a/a/b.js"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a/b/**/*.js",
 			Matches:    []string{"a/b/z.js", "a/b/c/z.js"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "**/*.md",
 			Matches:    []string{"foo.md", "foo/bar.md"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "**/*",
 			Matches:    []string{"ab/a/d", "ab/b", "a/b/c/d/a.js", "a/b/c.js", "a.js", "za.js", "ab", "a.b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "foo/**/",
@@ -224,18 +240,22 @@ var (
 		{
 			Glob:       "a[^[:alnum:]]b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a[-.,:; _]b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a@([^[:alnum:]])b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a@([-.,:; _])b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a@([.])b",
@@ -250,10 +270,12 @@ var (
 		{
 			Glob:       "a+([^[:alnum:]])b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 		{
 			Glob:       "a@(.|[^[:alnum:]])b",
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
+			NonMatches: []string{},
 		},
 	}
 )

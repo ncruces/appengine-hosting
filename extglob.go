@@ -6,15 +6,10 @@ import (
 	"strings"
 )
 
-var punct = regexp.MustCompile("[[:punct:]]")
-var globstar = regexp.MustCompile("^[^/]+(?:/[^/]*)*$")
-
 func CompileExtGlob(extglob string) (*regexp.Regexp, error) {
-	if extglob == "**" {
-		return globstar, nil
-	}
-
 	ctx := globctx{glob: extglob}
+	ctx.compileGlobstarPrefix()
+
 	if err := ctx.compileExpression(); err != nil {
 		return nil, err
 	}
@@ -29,11 +24,6 @@ type globctx struct {
 }
 
 func (c *globctx) compileExpression() error {
-	for c.depth == 0 && strings.HasPrefix(c.glob[c.pos:], "**/") {
-		c.regexp = append(c.regexp, "(?:[^/]+/(?:[^/]*/)*)?"...)
-		c.pos += 3
-	}
-
 	for c.pos < len(c.glob) {
 		switch curr := c.glob[c.pos]; curr {
 		case '\\':
@@ -87,10 +77,10 @@ func (c *globctx) compileExpression() error {
 			if err := c.compileCharacterClass(); err != nil {
 				return err
 			}
+		case '.', '^', '$', '(', '{':
+			c.regexp = append(c.regexp, '\\', curr)
+			c.pos += 1
 		default:
-			if punct.MatchString(string(curr)) {
-				c.regexp = append(c.regexp, '\\')
-			}
 			c.regexp = append(c.regexp, curr)
 			c.pos += 1
 		}
@@ -102,19 +92,19 @@ func (c *globctx) compileExpression() error {
 	return nil
 }
 
-func (c *globctx) compileSubExpression(s0 string, s1 string, s2 string) error {
+func (c *globctx) compileSubExpression(prefix string, suffix string, noexpr string) error {
 	if strings.HasPrefix(c.glob[c.pos+1:], "(") {
-		c.regexp = append(c.regexp, s0...)
+		c.regexp = append(c.regexp, prefix...)
 		c.depth += 1
 		c.pos += 2
 		if err := c.compileExpression(); err != nil {
 			return err
 		}
-		c.regexp = append(c.regexp, s1...)
+		c.regexp = append(c.regexp, suffix...)
 		c.depth -= 1
 		c.pos += 1
 	} else {
-		c.regexp = append(c.regexp, s2...)
+		c.regexp = append(c.regexp, noexpr...)
 		c.pos += 1
 	}
 	return nil
@@ -124,17 +114,21 @@ func (c *globctx) compileCharacterClass() error {
 	c.regexp = append(c.regexp, '[')
 	c.pos += 1
 
-	for c.pos < len(c.glob) {
+	if c.pos < len(c.glob) {
 		switch curr := c.glob[c.pos]; curr {
-		case '!', '^':
-			c.regexp = append(c.regexp, '^')
-			c.pos += 1
-			continue
 		case ']', '-':
 			c.regexp = append(c.regexp, curr)
 			c.pos += 1
+
+		case '!', '^':
+			c.regexp = append(c.regexp, '^')
+			c.pos += 1
+
+			if strings.HasPrefix(c.glob[c.pos:], "]") {
+				c.regexp = append(c.regexp, ']')
+				c.pos += 1
+			}
 		}
-		break
 	}
 
 	for c.pos < len(c.glob) {
@@ -171,4 +165,15 @@ func (c *globctx) compileEscapeSequence() error {
 	c.regexp = append(c.regexp, '\\', c.glob[c.pos+1])
 	c.pos += 2
 	return nil
+}
+
+func (c *globctx) compileGlobstarPrefix() {
+	if c.glob == "**" {
+		c.regexp = append(c.regexp, "(?:[^/]+(?:/[^/]*)*)?"...)
+		return
+	}
+	for strings.HasPrefix(c.glob[c.pos:], "**/") {
+		c.regexp = append(c.regexp, "(?:[^/]+(?:/[^/]*)*/)?"...)
+		c.pos += 3
+	}
 }
