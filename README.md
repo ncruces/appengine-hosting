@@ -24,6 +24,6 @@ You should now be able to use HTTPS to access the website.
 * Multiple domains can be mapped to the app, content will be served from the corresponding buckets.
 * All HTTP traffic is 301 redirected to HTTPS (see [app.yaml](app.yaml))
 * Some [security headers](https://securityheaders.io/) are added, many [Cloud Storage headers](https://cloud.google.com/storage/docs/xml-api/reference-headers) are hidden.
-* Redirects, rewrites, as in [Firebase Hosting](https://firebase.google.com/docs/hosting/url-redirects-rewrites), see [firebase-sample.json](firebase-sample.json).
+* Redirects, rewrites, as in [Firebase Hosting](https://firebase.google.com/docs/hosting/url-redirects-rewrites) (see [firebase-sample.json](firebase-sample.json)).
 * This [issue](https://issuetracker.google.com/issues/70223986) means compressed objects in Cloud Storage larger than 32Mb are not supported (don't use `gsutil -z` or `-Z` to upload them).
 * This [issue](https://cloud.google.com/storage/docs/static-website#empty-obj) is fixed.
