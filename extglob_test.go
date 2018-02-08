@@ -277,6 +277,46 @@ var (
 			Matches:    []string{"a.b", "a,b", "a:b", "a-b", "a;b", "a b", "a_b"},
 			NonMatches: []string{},
 		},
+		{
+			Glob:       "/blog/:post",
+			Matches:    []string{"/blog/abc"},
+			NonMatches: []string{"/blog", "/blog/", "/blog/abc/", "/blog/abc/def"},
+		},
+		{
+			Glob:       "/blog/:post?",
+			Matches:    []string{"/blog", "/blog/", "/blog/abc"},
+			NonMatches: []string{"/blog/abc/", "/blog/abc/def"},
+		},
+		{
+			Glob:       "/blog/:post*",
+			Matches:    []string{"/blog", "/blog/", "/blog/abc", "/blog/abc/", "/blog/abc/def"},
+			NonMatches: []string{},
+		},
+		{
+			Glob:       "/blog/:post+",
+			Matches:    []string{"/blog/abc", "/blog/abc/", "/blog/abc/def"},
+			NonMatches: []string{"/blog", "/blog/"},
+		},
+		{
+			Glob:       "/users/:id/profile",
+			Matches:    []string{"/users/my/profile"},
+			NonMatches: []string{"/users/profile", "/users/my/scnd/profile"},
+		},
+		{
+			Glob:       "/users/:id?/profile",
+			Matches:    []string{"/users/profile", "/users/my/profile"},
+			NonMatches: []string{"/users/my/scnd/profile"},
+		},
+		{
+			Glob:       "/users/:id*/profile",
+			Matches:    []string{"/users/profile", "/users/my/profile", "/users/my/scnd/profile"},
+			NonMatches: []string{},
+		},
+		{
+			Glob:       "/users/:id+/profile",
+			Matches:    []string{"/users/my/profile", "/users/my/scnd/profile"},
+			NonMatches: []string{"/users/profile"},
+		},
 	}
 )
 
@@ -298,4 +338,6 @@ func Test_CompileExtGlob(t *testing.T) {
 			}
 		}
 	}
+	t.Logf("Compiled template %s: %s", "https://blog.myapp.com/:post*", CompileTemplate("https://blog.myapp.com/:post*"))
+	t.Logf("Compiled template %s: %s", "/users/:id/newProfile", CompileTemplate("/users/:id/newProfile"))
 }

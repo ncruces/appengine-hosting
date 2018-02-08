@@ -66,13 +66,19 @@ func (c *globctx) compileExpression() error {
 				c.pos += 1
 			}
 		case '/':
-			if c.depth == 0 && (c.glob[c.pos:] == "/**" || strings.HasPrefix(c.glob[c.pos:], "/**/")) {
-				c.regexp = append(c.regexp, "(?:/.*)?"...)
-				c.pos += 3
-			} else {
-				c.regexp = append(c.regexp, '/')
-				c.pos += 1
+			if c.depth == 0 {
+				if c.glob[c.pos:] == "/**" || strings.HasPrefix(c.glob[c.pos:], "/**/") {
+					c.regexp = append(c.regexp, "(?:/.*)?"...)
+					c.pos += 3
+					break
+				}
+				if strings.HasPrefix(c.glob[c.pos:], "/:") {
+					c.compileNamedCapture()
+					break
+				}
 			}
+			c.regexp = append(c.regexp, '/')
+			c.pos += 1
 		case '[':
 			if err := c.compileCharacterClass(); err != nil {
 				return err
@@ -176,4 +182,79 @@ func (c *globctx) compileGlobstarPrefix() {
 		c.regexp = append(c.regexp, "(?:[^/].*)?"...)
 		c.pos += 2
 	}
+}
+
+func (c *globctx) compileNamedCapture() {
+	c.regexp = append(c.regexp, "(?:/(?P<"...)
+	c.pos += 2
+
+	for c.pos < len(c.glob) {
+		switch curr := c.glob[c.pos]; curr {
+		case '/':
+			c.regexp = append(c.regexp, ">[^/]+))"...)
+			return
+		case '?':
+			c.regexp = append(c.regexp, ">[^/]*))?"...)
+			c.pos += 1
+			return
+		case '+':
+			c.regexp = append(c.regexp, ">.+))"...)
+			c.pos += 1
+			return
+		case '*':
+			c.regexp = append(c.regexp, ">.*))?"...)
+			c.pos += 1
+			return
+		case '>':
+			c.regexp = append(c.regexp, '\\', curr)
+			c.pos += 1
+		default:
+			c.regexp = append(c.regexp, curr)
+			c.pos += 1
+		}
+	}
+
+	c.regexp = append(c.regexp, ">[^/]+))"...)
+}
+
+func CompileTemplate(template string) string {
+	var result []byte
+	var pos int
+
+	for pos < len(template) {
+		switch curr := template[pos]; curr {
+		case ':':
+			if pos == 0 || template[pos-1] == '/' {
+				result = append(result, "${"...)
+				pos += 1
+
+			loop:
+				for pos < len(template) {
+					switch curr := template[pos]; curr {
+					case '/':
+						break loop
+					case '?', '+', '*':
+						pos += 1
+						break loop
+					default:
+						result = append(result, curr)
+						pos += 1
+					}
+				}
+
+				result = append(result, '}')
+			} else {
+				result = append(result, ':')
+				pos += 1
+			}
+		case '$':
+			result = append(result, "$$"...)
+			pos += 1
+		default:
+			result = append(result, curr)
+			pos += 1
+		}
+	}
+
+	return string(result)
 }

@@ -33,10 +33,14 @@ func (c FirebaseConfiguration) processRedirects(path string) (int, string) {
 			return http.StatusInternalServerError, ""
 		}
 		if pattern.MatchString(path) {
-			if redirect.Type == 0 {
-				return http.StatusMovedPermanently, redirect.Destination
+			dest := redirect.Destination
+			if pattern.NumSubexp() > 0 {
+				dest = pattern.ReplaceAllString(path, CompileTemplate(dest))
 			}
-			return redirect.Type, redirect.Destination
+			if redirect.Type == 0 {
+				return http.StatusMovedPermanently, dest
+			}
+			return redirect.Type, dest
 		}
 	}
 	return 0, ""
