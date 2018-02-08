@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 )
 
 type FirebaseConfiguration struct {
@@ -27,7 +28,7 @@ type FirebaseConfiguration struct {
 
 func (c FirebaseConfiguration) processRedirects(path string) (int, string) {
 	for _, redirect := range c.Redirects {
-		pattern, err := CompileExtGlob(redirect.Source)
+		pattern, err := CompileExtGlob("/" + strings.TrimPrefix(redirect.Source, "/"))
 		if err != nil {
 			return http.StatusInternalServerError, ""
 		}
@@ -43,7 +44,7 @@ func (c FirebaseConfiguration) processRedirects(path string) (int, string) {
 
 func (c FirebaseConfiguration) processRewrites(path string) string {
 	for _, rewrite := range c.Rewrites {
-		pattern, err := CompileExtGlob(rewrite.Source)
+		pattern, err := CompileExtGlob("/" + strings.TrimPrefix(rewrite.Source, "/"))
 		if err != nil {
 			return ""
 		}
@@ -56,7 +57,7 @@ func (c FirebaseConfiguration) processRewrites(path string) string {
 
 func (c FirebaseConfiguration) processHeaders(path string, header http.Header) {
 	for _, headers := range c.Headers {
-		pattern, err := CompileExtGlob(headers.Source)
+		pattern, err := CompileExtGlob("/" + strings.TrimPrefix(headers.Source, "/"))
 		if err != nil {
 			return
 		}
