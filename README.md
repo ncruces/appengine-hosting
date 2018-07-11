@@ -2,7 +2,7 @@
 
 [Google Cloud Storage](https://cloud.google.com/storage/) allows you to configure a bucket to [host a static website](https://cloud.google.com/storage/docs/hosting-static-website), with one big caveat: no HTTPS support.
 
-[Proposed solutions](https://cloud.google.com/storage/docs/static-website#https) are: [a load balancer](https://cloud.google.com/compute/docs/load-balancing/http/adding-a-backend-bucket-to-content-based-load-balancing), a [third-party CDN](https://cloud.google.com/interconnect/docs/how-to/cdn-interconnect), and [Firebase Hosting](https://firebase.google.com/docs/hosting/).
+[Proposed solutions](https://cloud.google.com/storage/docs/troubleshooting#https) are: [a load balancer](https://cloud.google.com/compute/docs/load-balancing/http/adding-a-backend-bucket-to-content-based-load-balancing), a [third-party CDN](https://cloud.google.com/interconnect/docs/how-to/cdn-interconnect), and [Firebase Hosting](https://firebase.google.com/docs/hosting/).
 
 This offers an additional, cost effective, customizable, alternative: a single App Engine app that can host as many static websites as needed.
 
