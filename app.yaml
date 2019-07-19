@@ -1,10 +1,10 @@
-runtime: go
-api_version: go1
+runtime: go111
+
 automatic_scaling:
   max_concurrent_requests: 50
 
 handlers:
 - url: /.*
-  script: _go_app
+  script: auto
   secure: always
   redirect_http_response_code: 301

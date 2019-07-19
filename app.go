@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"encoding/json"
@@ -98,8 +98,9 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 }
 
 func makeContext(w http.ResponseWriter, r *http.Request) HandlerContext {
-	bucket := r.URL.Hostname()
+	bucket := r.Host
 	object := r.URL.EscapedPath()
+    source, _ := google.DefaultTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only")
 
 	return HandlerContext{
 		w:        w,
@@ -111,7 +112,7 @@ func makeContext(w http.ResponseWriter, r *http.Request) HandlerContext {
 		gcs: &http.Client{
 			Transport: &oauth2.Transport{
 				Base:   &urlfetch.Transport{Context: r.Context()},
-				Source: google.AppEngineTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only"),
+				Source: source,
 			},
 		},
 	}
