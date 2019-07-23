@@ -4,16 +4,17 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/appengine/blobstore"
-	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/appengine/blobstore"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/urlfetch"
 )
 
 var ErrUnspecified = errors.New("appengine-hosting: unspecified")
@@ -59,7 +60,7 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 		return HttpResult{Status: http.StatusInternalServerError}
 	}
 
-	if location := ctx.getCleanUrl(); location != "" {
+	if location := ctx.getCleanURL(); location != "" {
 		return HttpResult{Status: http.StatusMovedPermanently, Location: location + ctx.getQuery()}
 	}
 
@@ -100,7 +101,7 @@ func StaticWebsiteHandler(w http.ResponseWriter, r *http.Request) HttpResult {
 func makeContext(w http.ResponseWriter, r *http.Request) HandlerContext {
 	bucket := r.Host
 	object := r.URL.EscapedPath()
-    source, _ := google.DefaultTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only")
+	source, _ := google.DefaultTokenSource(r.Context(), "https://www.googleapis.com/auth/devstorage.read_only")
 
 	return HandlerContext{
 		w:        w,
@@ -205,7 +206,7 @@ func (ctx *HandlerContext) getRedirect() (int, string) {
 	return ctx.firebase.processRedirects(ctx.r.URL.Path)
 }
 
-func (ctx *HandlerContext) getCleanUrl() string {
+func (ctx *HandlerContext) getCleanURL() string {
 	path := ctx.r.URL.Path
 
 	if ctx.firebase.CleanUrls {
@@ -372,6 +373,7 @@ func setHeaders(h http.Header) {
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	h.Set("Strict-Transport-Security", "max-age=86400")
 	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-DNS-Prefetch-Control", "off")
 	h.Set("X-Download-Options", "noopen")
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	h.Set("X-XSS-Protection", "1; mode=block")
